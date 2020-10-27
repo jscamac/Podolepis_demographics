@@ -1,0 +1,10 @@
+*.pdf
+*.Rproj
+*.drake
+*DS_Store
+*.Rproj
+*.Rproj.user
+*.Rhistory
+*.local
+*.bash_history
+.Rproj.user
