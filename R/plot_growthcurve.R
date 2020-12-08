@@ -25,40 +25,51 @@
 #' @importFrom magrittr %>%
 #' @export
 plot_growthcurve <- function(model, 
-                           new_data, 
-                           legend_label = NULL, 
-                           xlabel = "time",
-                           outfile,
-                           width,
-                           height,
-                           units) {
-
+                             new_data, 
+                             legend_label = NULL, 
+                             xlabel = "time",
+                             outfile,
+                             width,
+                             height,
+                             units) {
+  
   preds <- data.frame(key = new_data$key,
-                      year = new_data$julian_date,
-                      median = apply(brms::posterior_linpred(model, newdata = new_data, prob = 0.95, re.form = NA), 2, mean),
-                      ci_lb = apply(brms::posterior_linpred(model, newdata = new_data, prob = 0.95, re.form = NA), 2, quantile, 0.025),
-                      ci_ub = apply(brms::posterior_linpred(model, newdata = new_data, prob = 0.95, re.form = NA), 2, quantile, 0.975))
-  
-  
-  p1 <- ggplot2::ggplot(data = preds, ggplot2::aes(x=year, group = key, col = key, fill=key)) +
-    ggplot2::geom_ribbon(ggplot2::aes(ymin = ci_lb, ymax=ci_ub), alpha = 0.5,  colour = NA) +
-    ggplot2::geom_line(aes(y=median)) +
-    ggplot2::scale_fill_brewer(name = legend_label, palette = "Set2", aesthetics = c("colour", "fill")) +
-    ggplot2::scale_x_continuous(expand = c(0,0)) +
-    ggplot2::ylab("Leaf length (cm)") +
-    ggplot2::xlab(xlabel) +
-    ggplot2::theme_classic()
-  
-  # outfile supplied
-  if(!missing(outfile)) {
-    
-    # Create directory if it does not exist
-    if(!dir.exists(dirname(outfile))) {
-      dir.create(dirname(outfile), recursive = TRUE)
-    }
-    ggplot2::ggsave(filename =  outfile, width = width, height = height, 
-                    units = units, plot = p1)
-  } else {
-    p1
-  }
+                 year = new_data$julian_date,
+                 mean = apply(
+                   brms::posterior_linpred(
+                     model, 
+                     newdata = new_data, 
+                     re.form = NA), 2, mean),
+                 ci_lb = apply(
+                   brms::posterior_linpred(
+                     model, 
+                     newdata = new_data, 
+                     re.form = NA), 2, quantile, 0.025),
+                 ci_ub = apply(brms::posterior_linpred(
+                   model, 
+                   newdata = new_data, 
+                   re.form = NA), 2, quantile, 0.975))
+      
+      
+      p1 <- ggplot2::ggplot(data = preds, ggplot2::aes(x=year, group = key, col = key, fill=key)) +
+        ggplot2::geom_ribbon(ggplot2::aes(ymin = ci_lb, ymax=ci_ub), alpha = 0.5,  colour = NA) +
+        ggplot2::geom_line(aes(y=mean)) +
+        ggplot2::scale_fill_brewer(name = legend_label, palette = "Set2", aesthetics = c("colour", "fill")) +
+        ggplot2::scale_x_continuous(expand = c(0,0)) +
+        ggplot2::ylab("Leaf length (cm)") +
+        ggplot2::xlab(xlabel) +
+        ggplot2::theme_classic()
+      
+      # outfile supplied
+      if(!missing(outfile)) {
+        
+        # Create directory if it does not exist
+        if(!dir.exists(dirname(outfile))) {
+          dir.create(dirname(outfile), recursive = TRUE)
+        }
+        ggplot2::ggsave(filename =  outfile, width = width, height = height, 
+                        units = units, plot = p1)
+      } else {
+        p1
+      }
 }

@@ -51,7 +51,8 @@ compile_data <- function(file, type) {
     # Redefine individual id
     dplyr::mutate(ind_id = as.integer(
       forcats::fct_inorder(forcats::as_factor(ind_id))),
-      treatment_id = ifelse(treatment=="control", 0, 1)) %>%
+      treatment_id = ifelse(treatment=="control", 0, 1),
+      aspect_id = ifelse(aspect=="NW",0,1)) %>%
     # Add a census id column
     dplyr::mutate(census =  findInterval(date, 
                                          unique(.$date), 
@@ -59,7 +60,7 @@ compile_data <- function(file, type) {
   
   if(type =="survival") {
     out <- out %>%
-      dplyr::select(site_id, elevation, aspect, treatment,treatment_id, 
+      dplyr::select(site_id, elevation, aspect, aspect_id, treatment,treatment_id, 
                     census, start_date = date, next_date, julian_start,
                     julian_next, ind_id, leaf_length, death_next) %>%
       dplyr::filter(!is.na(julian_next))
@@ -76,7 +77,7 @@ compile_data <- function(file, type) {
                     # Rescale census by
                     census = census - 1) %>%
       dplyr::ungroup() %>%
-      dplyr::select(site_id, elevation, aspect, treatment,treatment_id,
+      dplyr::select(site_id, elevation, aspect, aspect_id, treatment,treatment_id,
                     census, start_date = date, julian_date = julian_start, 
                     ind_id, init_leaf_length, leaf_length) %>%
       # Remove first census (and any individuals that did not survive at least

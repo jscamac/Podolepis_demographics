@@ -8,30 +8,24 @@ plan <- drake::drake_plan(
     compile_data(file = drake::file_in("raw_data/podolepis_data.csv"),
                  type = "growth"),
   
-  climate_data =
-    summarise_climate(file = drake::file_in("raw_data/nichemapper_output.csv"),
-                      census_dates = unique(c(mortality_data$start_date, 
-                                              mortality_data$next_date)), 
-                      wilting_pt = 0.15),
   
+  ################# Survival modeling #################
   
-  ################# Survival modelling #################
-  
-  mortality_model_data = dplyr::left_join(mortality_data, climate_data,
-                                          by = c("site_id", "census")) %>%
+  mortality_model_data = 
+    mortality_data %>%
     dplyr::mutate(
-      leaf_length_cs = (leaf_length - 6)/(2 * sd(leaf_length)),
-      D0cm_cs = (D0cm - (10*24*365.25))/(2 * sd(D0cm))),
+      elevation_cs = (elevation - 1700)/(2 * sd(elevation)),
+      leaf_length_cs = (leaf_length - 6)/(2 * sd(leaf_length))),
   
   # Cubic M-splines hazard model (Flexible parametric model)
-  
   ms_hazard_model = rstanarm::stan_surv(formula = 
                                           Surv(julian_start, 
                                                julian_next, 
                                                death_next) ~ 
-                                          treatment_id + 
                                           leaf_length_cs + 
-                                          D0cm_cs + 
+                                          elevation_cs * treatment_id +
+                                          aspect_id * treatment_id +
+                                          elevation_cs * aspect_id +
                                           (1|site_id) + 
                                           (1|ind_id),
                                         data = mortality_model_data, 
@@ -50,9 +44,10 @@ plan <- drake::drake_plan(
                                            Surv(julian_start, 
                                                 julian_next, 
                                                 death_next) ~ 
-                                           treatment_id + 
                                            leaf_length_cs + 
-                                           D0cm_cs + 
+                                           elevation_cs * treatment_id +
+                                           aspect_id * treatment_id +
+                                           elevation_cs * aspect_id +
                                            (1|site_id) + 
                                            (1|ind_id),
                                          data = mortality_model_data, 
@@ -71,9 +66,9 @@ plan <- drake::drake_plan(
                                                Surv(julian_start, 
                                                     julian_next, 
                                                     death_next) ~ 
-                                               treatment_id + 
-                                               leaf_length_cs + 
-                                               D0cm_cs + 
+                                               elevation_cs * treatment_id +
+                                               aspect_id * treatment_id +
+                                               elevation_cs * aspect_id +
                                                (1|site_id) + 
                                                (1|ind_id),
                                              data = mortality_model_data, 
@@ -92,9 +87,10 @@ plan <- drake::drake_plan(
                                                 Surv(julian_start, 
                                                      julian_next, 
                                                      death_next) ~ 
-                                                treatment_id + 
                                                 leaf_length_cs + 
-                                                D0cm_cs + 
+                                                elevation_cs * treatment_id +
+                                                aspect_id * treatment_id +
+                                                elevation_cs * aspect_id +
                                                 (1|site_id) + 
                                                 (1|ind_id),
                                               data = mortality_model_data, 
@@ -111,10 +107,9 @@ plan <- drake::drake_plan(
   # Compare hazard models
   
   hazard_model_decision = collate_cv_stats(x = list(ms_hazard_model_kfold, 
-                                                    exp_hazard_model_kfold, 
-                                                    weibull_hazard_model_kfold,
-                                                    gompertz_hazard_model_kfold)),
-  
+                                                        exp_hazard_model_kfold, 
+                                                        weibull_hazard_model_kfold,
+                                                        gompertz_hazard_model_kfold)),
   plot_hazard_decision =
     plot_cv(hazard_model_decision,
             model_labs = c("ms_hazard_model" = "Cubic M-splines hazard model",
@@ -126,78 +121,103 @@ plan <- drake::drake_plan(
             width = 6
     ),
   
-  survival_plot = 
+  survival_plot =
     # Coefficient plot
     ggplot2::ggsave(
       cowplot::plot_grid(
-        plot_effects(model = gompertz_hazard_model, 
+        plot_effects(model = ms_hazard_model,
                      pars = c("(Intercept)",
-                              "treatment_id", 
+                              "treatment_id",
                               "leaf_length_cs",
-                              "D0cm_cs"),
-                     par_labels = c("(Intercept)" = "Intercept", 
-                                    "treatment_id" = "Gap treatment", 
+                              "aspect_id",
+                              "elevation_cs",
+                              "treatment_id:aspect_id",
+                              "elevation_cs:treatment_id",
+                              "elevation_cs:aspect_id"),
+                     par_labels = c("(Intercept)" = "Intercept",
+                                    "treatment_id" = "Gap treatment",
                                     "leaf_length_cs" = "Leaf length",
-                                    "D0cm_cs" = "CDCH (surface)"),
+                                    "aspect_id" = "SE Aspect",
+                                    "elevation_cs" = "Elevation",
+                                    "treatment_id:aspect_id" = "SE Aspect x Gap",
+                                    "elevation_cs:treatment_id" = "Elevation x Gap",
+                                    "elevation_cs:aspect_id" = "Elevation x SE Aspect"
+                     ),
                      xlabel = "Standardized effects"),
         # Treatment
-        plot_survcurve(model = gompertz_hazard_model,
+        plot_survcurve(model = ms_hazard_model,
                        new_data = data.frame(
                          key = c("Control", "Gap"),
                          leaf_length_cs = c(0,0),
                          treatment_id = c(0,1),
-                         D0cm_cs = c(0,0),
+                         aspect_id = c(0,0),
+                         elevation_cs = c(0,0),
                          ind_id = c(0,0),
                          site_id = c(0,0)),
                        legend_label = "Treatment",
                        xlabel = "Year") +
           ggplot2::theme(legend.position = "top"),
-        
+
         # Leaf length
-        plot_survcurve(model = gompertz_hazard_model,
+        plot_survcurve(model = ms_hazard_model,
                        new_data = data.frame(
-                         key = c("2 cm", "10 cm"),
-                         leaf_length_cs = 
+                         key = c("1 cm", "18 cm"),
+                         leaf_length_cs =
                            # Convert key values to standardized values
-                           c((2 - 6)/(2 * sd(mortality_model_data$leaf_length)),
-                             (10 - 6)/(2 * sd(mortality_model_data$leaf_length))),
+                           c((1 - 6)/(2 * sd(mortality_model_data$leaf_length)),
+                             (18 - 6)/(2 * sd(mortality_model_data$leaf_length))),
                          treatment_id = c(0,0),
-                         D0cm_cs = c(0,0),
+                         aspect_id = c(0,0),
+                         elevation_cs = c(0,0),
                          ind_id = c(0,0),
                          site_id = c(0,0)),
                        legend_label = "Leaf length",
                        xlabel = "Year") +
           ggplot2::theme(legend.position = "top"),
-        
-        # Cumulative degree hours
-        plot_survcurve(model = gompertz_hazard_model,
+
+        # Aspect
+        plot_survcurve(model = ms_hazard_model,
                        new_data = data.frame(
-                         key = c("5 °C", "15 °C"),
+                         key = c("NW", "SE"),
                          leaf_length_cs = c(0,0),
                          treatment_id = c(0,0),
-                         D0cm_cs = 
-                           c(((5*24*365.25) - (10*24*365.25))/(2 * sd(mortality_model_data$D0cm)),
-                             ((15*24*365.25 - (10*24*365.25))/(2 * sd(mortality_model_data$D0cm)))),
+                         aspect_id = c(0,1),
+                         elevation_cs = c(0,0),
                          ind_id = c(0,0),
                          site_id = c(0,0)),
-                       legend_label = "Average Surface temperature",
+                       legend_label = "Aspect",
+                       xlabel = "Year") +
+          ggplot2::theme(legend.position = "top"),
+        # Elevation
+        plot_survcurve(model = ms_hazard_model,
+                       new_data = data.frame(
+                         key = c("1620", "1860"),
+                         leaf_length_cs = c(0,0),
+                         treatment_id = c(0,0),
+                         aspect_id = c(0,0),
+                         elevation_cs = # Convert key values to standardized values
+                           c((1620 - 1700)/(2 * sd(mortality_model_data$elevation)),
+                             (1860 - 1700)/(2 * sd(mortality_model_data$elevation))),
+                         ind_id = c(0,0),
+                         site_id = c(0,0)),
+                       legend_label = "Elevation",
                        xlabel = "Year") +
           ggplot2::theme(legend.position = "top"),
         ncol = 1, labels = LETTERS),
       filename = "manuscript/figures/hazard_figure.pdf",
       width = 5,
       height = 8),
-  
+
   plot_site_hazard_effects =
-    plot_ranefs(model = gompertz_hazard_model,
+    plot_ranefs(model = ms_hazard_model,
                 type = "site_id",
                 ylabel = "Site effects",
                 outfile = "manuscript/figures/hazard_site_effect.pdf",
                 width = 5,
                 height = 7),
-  
+
   plot_ind_hazard_effects =
-    plot_ranefs(model = gompertz_hazard_model,
+    plot_ranefs(model = ms_hazard_model,
                 type = "ind_id",
                 ylabel = "Individual effects",
                 outfile = "manuscript/figures/hazard_ind_effect.pdf",
@@ -206,16 +226,17 @@ plan <- drake::drake_plan(
   
   ################# Growth modelling #################
   
-  growth_model_data = dplyr::left_join(growth_data, climate_data,
-                                       by = c("site_id", "census")) %>%
-    dplyr::mutate(D0cm_cs = (D0cm - (10*24*365.25))/(2 * sd(D0cm))),
+  growth_model_data = 
+    growth_data %>%
+    dplyr::mutate(elevation_cs = (elevation - 1700)/(2 * sd(elevation))),
   
   # Logistic model
   logistic_model =
     brms::brm(
       bf(
         leaf_length | trunc(lb=0) ~ Asym/(1 + (Asym/init_leaf_length -1) * exp(-exp(lograte) * julian_date)), 
-        lograte ~ treatment_id + D0cm_cs + (1|site_id) + (1|ind_id),
+        lograte ~ treatment_id * elevation_cs + treatment_id * aspect_id + elevation_cs * aspect_id + 
+          (1|site_id) + (1|ind_id),
         Asym ~ 1, nl = TRUE),
       data = growth_model_data, 
       control = list(adapt_delta = 0.99, max_treedepth = 15),
@@ -236,7 +257,8 @@ plan <- drake::drake_plan(
     brms::brm(
       bf(
         leaf_length | trunc(lb=0) ~ Asym * (1 -(1 - (init_leaf_length/Asym)) * exp(-exp(lograte) * julian_date)), 
-        lograte ~ treatment_id + D0cm_cs + (1|site_id) + (1|ind_id),
+        lograte ~ treatment_id * elevation_cs + treatment_id * aspect_id + elevation_cs * aspect_id + 
+          (1|site_id) + (1|ind_id),
         Asym ~ 1, nl = TRUE),
       data = growth_model_data, 
       control = list(adapt_delta = 0.99, max_treedepth = 15),
@@ -256,7 +278,8 @@ plan <- drake::drake_plan(
     brms::brm(
       bf(
         leaf_length | trunc(lb=0) ~ Asym * (1 + ((init_leaf_length/Asym)^(0.33)-1) * exp(-exp(lograte) * julian_date))^3, 
-        lograte ~ treatment_id + D0cm_cs + (1|site_id) + (1|ind_id),
+        lograte ~ treatment_id * elevation_cs + treatment_id * aspect_id + elevation_cs * aspect_id + 
+          (1|site_id) + (1|ind_id),
         Asym ~ 1, nl = TRUE),
       data = growth_model_data, 
       control = list(adapt_delta = 0.99, max_treedepth = 15),
@@ -287,60 +310,82 @@ plan <- drake::drake_plan(
             width = 6
     ),
   
-  growth_plot = 
+  growth_plot =
     ggplot2::ggsave(
       cowplot::plot_grid(
         # Coefficient plot
-        plot_effects(logistic_model, 
+        plot_effects(vb_growth_model,
                      pars = c("b_lograte_Intercept",
-                              "b_lograte_treatment_id", 
-                              "b_lograte_D0cm_cs"),
-                     par_labels = c("b_lograte_Intercept" = "Intercept", 
-                                    "b_lograte_treatment_id" = "Gap treatment", 
-                                    "b_lograte_D0cm_cs" = "CDCH (surface)"),
+                              "b_lograte_treatment_id",
+                              "b_lograte_aspect_id",
+                              "b_lograte_elevation_cs",
+                              "b_lograte_treatment_id:aspect_id",
+                              "b_lograte_treatment_id:elevation_cs",
+                              "b_lograte_elevation_cs:aspect_id"),
+                     par_labels = c("b_lograte_Intercept" = "Intercept",
+                                    "b_lograte_treatment_id" = "Gap treatment",
+                                    "b_lograte_aspect_id" = "SE Aspect",
+                                    "b_lograte_elevation_cs" = "Elevation",
+                                    "b_lograte_treatment_id:aspect_id" = "SE Aspect x Gap",
+                                    "b_lograte_treatment_id:elevation_cs" = "Elevation x Gap",
+                                    "b_lograte_elevation_cs:aspect_id" = "Elevation x SE Aspect"),
                      xlabel = "Standardized effects"),
-        
         # Treatment response
-        plot_growthcurve(model = logistic_model, 
-                         new_data = 
-                           data.frame(key = rep(c("Control", "Gap"), each =5),
-                                      julian_date = rep(0:4, times = 2),
-                                      init_leaf_length = rep(6,10),
-                                      treatment_id = rep(c(0,1), each =5),
-                                      D0cm_cs = rep(0,10)),
+        plot_growthcurve(model = vb_growth_model,
+                         new_data =
+                           data.frame(key = rep(c("Control", "Gap"), each =100),
+                                      julian_date = rep(seq(0.001, 4, length.out = 100), times = 2),
+                                      init_leaf_length = 1,
+                                      treatment_id = rep(c(0,1), each =100),
+                                      aspect_id = 0,
+                                      elevation_cs = 0),
                          xlabel = "Year",
                          legend_label = "Treatment") +
-          
+
           ggplot2::theme(legend.position = "top"),
-        
-        # Cumulative degree hour response
-        plot_growthcurve(model = logistic_model, 
-                         new_data = 
-                           data.frame(key = rep(c("5 °C", "15 °C"), each =5),
-                                      julian_date = rep(0:4, times = 2),
-                                      init_leaf_length = rep(6,10),
-                                      treatment_id = rep(c(0,0), each =5),
-                                      D0cm_cs =
-                                        rep(c(((5*24*365.25) - (10*24*365.25))/(2 * sd(growth_model_data$D0cm)),
-                                              ((15*24*365.25 - (10*24*365.25))/(2 * sd(growth_model_data$D0cm)))), each =5)),
+
+        # Aspect
+        plot_growthcurve(model = vb_growth_model,
+                         new_data =
+                           data.frame(key = rep(c("NW", "SW"), each =100),
+                                      julian_date = rep(seq(0.001, 4, length.out = 100), times = 2),
+                                      init_leaf_length = 1,
+                                      treatment_id = 0,
+                                      aspect_id = rep(c(0,1), each =100),
+                                      elevation_cs = 0),
                          xlabel = "Year",
-                         legend_label = "Average Surface temperature") +
+                         legend_label = "Aspect") +
+          ggplot2::theme(legend.position = "top"),
+
+        # Elevation
+        plot_growthcurve(model = vb_growth_model,
+                         new_data =
+                           data.frame(key = rep(c("1620", "1860"), each =100),
+                                      julian_date = rep(seq(0.001, 4, length.out = 100), times = 2),
+                                      init_leaf_length = 1,
+                                      treatment_id = 0,
+                                      aspect_id = 0,
+                                      elevation_cs = # Convert key values to standardized values
+                                        rep(c((1620 - 1700)/(2 * sd(growth_model_data$elevation)),
+                                              (1860 - 1700)/(2 * sd(growth_model_data$elevation))), each=100)),
+                         xlabel = "Year",
+                         legend_label = "Elevation") +
           ggplot2::theme(legend.position = "top"),
         ncol=1, labels = LETTERS),
       filename = "manuscript/figures/growth_figure.pdf",
       width = 5,
       height = 7),
-  
+
   plot_site_growth_effects =
-    plot_ranefs(model = logistic_model,
+    plot_ranefs(model = vb_growth_model,
                 type = "site_id",
                 ylabel = "Site effects",
                 outfile = "manuscript/figures/growth_site_effect.pdf",
                 width = 5,
                 height = 7),
-  
+
   plot_ind_growth_effects =
-    plot_ranefs(model = logistic_model,
+    plot_ranefs(model = vb_growth_model,
                 type = "ind_id",
                 ylabel = "Individual effects",
                 outfile = "manuscript/figures/growth_ind_effect.pdf",

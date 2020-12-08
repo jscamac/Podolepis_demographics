@@ -25,7 +25,8 @@
 #' @importFrom magrittr %>%
 #' @export
 plot_survcurve <- function(model, 
-                           new_data, 
+                           new_data,
+                           max_time,
                            legend_label = NULL, 
                            xlabel = "time",
                            outfile,
