@@ -14,7 +14,7 @@ plan <- drake::drake_plan(
   mortality_model_data = 
     mortality_data %>%
     dplyr::mutate(
-      elevation_cs = (elevation - 1700)/(2 * sd(elevation)),
+      elevation_cs = (elevation - 1740)/(2 * sd(elevation)),
       leaf_length_cs = (leaf_length - 6)/(2 * sd(leaf_length))),
   
   # Cubic M-splines hazard model (Flexible parametric model)
@@ -156,7 +156,8 @@ plan <- drake::drake_plan(
                          site_id = c(0,0)),
                        legend_label = "Treatment",
                        xlabel = "Year") +
-          ggplot2::theme(legend.position = "top"),
+          ggplot2::theme(legend.position = "top") +
+          ggplot2::scale_x_continuous(expand = c(0,0), limits = c(0,3)),
 
         # Leaf length
         plot_survcurve(model = ms_hazard_model,
@@ -173,7 +174,8 @@ plan <- drake::drake_plan(
                          site_id = c(0,0)),
                        legend_label = "Leaf length",
                        xlabel = "Year") +
-          ggplot2::theme(legend.position = "top"),
+          ggplot2::theme(legend.position = "top") +
+          ggplot2::scale_x_continuous(expand = c(0,0), limits = c(0,3)),
 
         # Aspect
         plot_survcurve(model = ms_hazard_model,
@@ -187,7 +189,8 @@ plan <- drake::drake_plan(
                          site_id = c(0,0)),
                        legend_label = "Aspect",
                        xlabel = "Year") +
-          ggplot2::theme(legend.position = "top"),
+          ggplot2::theme(legend.position = "top") +
+          ggplot2::scale_x_continuous(expand = c(0,0), limits = c(0,3)),
         # Elevation
         plot_survcurve(model = ms_hazard_model,
                        new_data = data.frame(
@@ -196,13 +199,14 @@ plan <- drake::drake_plan(
                          treatment_id = c(0,0),
                          aspect_id = c(0,0),
                          elevation_cs = # Convert key values to standardized values
-                           c((1620 - 1700)/(2 * sd(mortality_model_data$elevation)),
-                             (1860 - 1700)/(2 * sd(mortality_model_data$elevation))),
+                           c((1620 - 1740)/(2 * sd(mortality_model_data$elevation)),
+                             (1860 - 1740)/(2 * sd(mortality_model_data$elevation))),
                          ind_id = c(0,0),
                          site_id = c(0,0)),
                        legend_label = "Elevation",
                        xlabel = "Year") +
-          ggplot2::theme(legend.position = "top"),
+          ggplot2::theme(legend.position = "top") +
+          ggplot2::scale_x_continuous(expand = c(0,0), limits = c(0,3)),
         ncol = 1, labels = LETTERS),
       filename = "manuscript/figures/hazard_figure.pdf",
       width = 5,
@@ -228,7 +232,7 @@ plan <- drake::drake_plan(
   
   growth_model_data = 
     growth_data %>%
-    dplyr::mutate(elevation_cs = (elevation - 1700)/(2 * sd(elevation))),
+    dplyr::mutate(elevation_cs = (elevation - 1740)/(2 * sd(elevation))),
   
   # Logistic model
   logistic_model =
@@ -347,7 +351,7 @@ plan <- drake::drake_plan(
         # Aspect
         plot_growthcurve(model = vb_growth_model,
                          new_data =
-                           data.frame(key = rep(c("NW", "SW"), each =100),
+                           data.frame(key = rep(c("NW", "SE"), each =100),
                                       julian_date = rep(seq(0.001, 4, length.out = 100), times = 2),
                                       init_leaf_length = 1,
                                       treatment_id = 0,
@@ -366,8 +370,8 @@ plan <- drake::drake_plan(
                                       treatment_id = 0,
                                       aspect_id = 0,
                                       elevation_cs = # Convert key values to standardized values
-                                        rep(c((1620 - 1700)/(2 * sd(growth_model_data$elevation)),
-                                              (1860 - 1700)/(2 * sd(growth_model_data$elevation))), each=100)),
+                                        rep(c((1620 - 1740)/(2 * sd(growth_model_data$elevation)),
+                                              (1860 - 1740)/(2 * sd(growth_model_data$elevation))), each=100)),
                          xlabel = "Year",
                          legend_label = "Elevation") +
           ggplot2::theme(legend.position = "top"),
